@@ -24,11 +24,13 @@ FocusScope {
 
     readonly property string emptyText: {
         if (backend.sources.length === 0)
-            return qsTr("No sources yet. Press 7 to add an Xtream Codes account or an M3U playlist.")
+            return (win.touch ? qsTr("No sources yet. Open Sources from the menu to add an Xtream Codes account or an M3U playlist.")
+                                 : qsTr("No sources yet. Press 7 to add an Xtream Codes account or an M3U playlist."))
         if (backend.busy && backend.section !== "favorites" && backend.section !== "continue")
             return qsTr("Loading…")
         switch (backend.section) {
-        case "favorites": return qsTr("Press F on a channel, a movie or a series to keep it here.")
+        case "favorites": return win.touch ? qsTr("Press and hold a channel, a movie or a series to keep it here.")
+                                           : qsTr("Press F on a channel, a movie or a series to keep it here.")
         case "continue": return qsTr("Movies and episodes you start watching show up here.")
         case "search":
             return backend.query.trim().length < 2 ? qsTr("Type at least two letters.")
@@ -56,10 +58,12 @@ FocusScope {
 
     ColumnLayout {
         anchors.fill: parent
-        anchors.margins: 16
+        anchors.margins: win.compact ? 8 : 16
         spacing: 10
 
+        // The phone's top bar already says where we are.
         RowLayout {
+            visible: !win.compact
             Layout.fillWidth: true
             Label {
                 text: win.sectionTitle(backend.section)
@@ -154,8 +158,11 @@ FocusScope {
                     onClicked: {
                         list.currentIndex = row.index
                         list.forceActiveFocus()
+                        if (win.touch)
+                            win.activate(row.key)
                     }
-                    onDoubleClicked: win.activate(row.key)
+                    onDoubleClicked: if (!win.touch) win.activate(row.key)
+                    onPressAndHold: if (win.touch) win.toggleFavorite(row.key)
                 }
 
                 RowLayout {

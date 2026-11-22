@@ -37,7 +37,7 @@ Rectangle {
             Label {
                 anchors.centerIn: parent
                 visible: art.status !== Image.Ready
-                text: pane.info.name ? qsTr("Enter to play") : qsTr("Nothing selected")
+                text: pane.info.name ? (win.touch ? qsTr("Tap to play") : qsTr("Enter to play")) : qsTr("Nothing selected")
                 color: win.muted
             }
         }

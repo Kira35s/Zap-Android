@@ -107,6 +107,8 @@ public:
     Q_INVOKABLE QString neighbor(const QString &key, int delta) const;
     Q_INVOKABLE QString nextEpisode(const QString &key) const;
     Q_INVOKABLE bool openExternally(const QString &key, double position = 0);
+    // Android only: stops the screen going to sleep while a video plays.
+    Q_INVOKABLE void keepScreenOn(bool on);
     Q_INVOKABLE void refresh();
     Q_INVOKABLE QString saveSource(const QVariantMap &values);
     Q_INVOKABLE void removeSource(const QString &id);

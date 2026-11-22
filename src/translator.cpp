@@ -116,7 +116,12 @@ void Translator::reload() {
 
     // Catalogs are compiled in, so only a different language needs a reload.
     // A changed Omarchy language still signals, so the settings show it.
+#ifdef Q_OS_ANDROID
+    // No Omarchy here: the phone's own language.
+    const QString system = QLocale::system().name().section('_', 0, 0);
+#else
     const QString system = readLanguage(m_languageFile);
+#endif
     const bool systemChanged = system != m_system;
     m_system = system;
     const QString language = m_override.isEmpty() ? system : m_override;

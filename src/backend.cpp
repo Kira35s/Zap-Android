@@ -19,6 +19,12 @@
 #include <algorithm>
 #include <memory>
 
+#ifdef Q_OS_ANDROID
+#include <QCoreApplication>
+#include <QJniEnvironment>
+#include <QJniObject>
+#endif
+
 namespace {
 
 // Lists change rarely; guides cover a few days and are refreshed twice a day.
@@ -766,6 +772,33 @@ bool Backend::openExternally(const QString &key, double position) {
     const Entry e = lookup(key);
     if (e.url.isEmpty())
         return false;
+#ifdef Q_OS_ANDROID
+    // Offers the stream to whichever video player is installed (VLC, MX Player…).
+    Q_UNUSED(position)
+    const QJniObject uri = QJniObject::callStaticObjectMethod(
+        "android/net/Uri", "parse", "(Ljava/lang/String;)Landroid/net/Uri;",
+        QJniObject::fromString(e.url).object<jstring>());
+    QJniObject intent("android/content/Intent", "(Ljava/lang/String;)V",
+                      QJniObject::fromString("android.intent.action.VIEW").object<jstring>());
+    intent.callObjectMethod("setDataAndType", "(Landroid/net/Uri;Ljava/lang/String;)Landroid/content/Intent;",
+                            uri.object(), QJniObject::fromString("video/*").object<jstring>());
+    intent.callObjectMethod("putExtra", "(Ljava/lang/String;Ljava/lang/String;)Landroid/content/Intent;",
+                            QJniObject::fromString("title").object<jstring>(),
+                            QJniObject::fromString(e.name).object<jstring>());
+    const QJniObject chooser = QJniObject::callStaticObjectMethod(
+        "android/content/Intent", "createChooser",
+        "(Landroid/content/Intent;Ljava/lang/CharSequence;)Landroid/content/Intent;",
+        intent.object(), QJniObject::fromString(e.name).object<jstring>());
+    QJniObject context = QNativeInterface::QAndroidApplication::context();
+    context.callMethod<void>("startActivity", "(Landroid/content/Intent;)V", chooser.object());
+    QJniEnvironment env;
+    if (env.checkAndClearExceptions()) {
+        m_problems << tr("No other app on this device can play this stream.");
+        emit statusChanged();
+        return false;
+    }
+    return true;
+#else
     const QString mpv = QStandardPaths::findExecutable("mpv");
     if (mpv.isEmpty()) {
         m_problems << tr("mpv isn't installed. Install it with: omarchy-pkg-add mpv");
@@ -777,6 +810,23 @@ bool Backend::openExternally(const QString &key, double position) {
         arguments << "--start=" + QString::number(qint64(position / 1000));
     arguments << e.url;
     return QProcess::startDetached(mpv, arguments);
+#endif
+}
+
+void Backend::keepScreenOn(bool on) {
+#ifdef Q_OS_ANDROID
+    QNativeInterface::QAndroidApplication::runOnAndroidMainThread([on] {
+        const QJniObject activity = QNativeInterface::QAndroidApplication::context();
+        const QJniObject window = activity.callObjectMethod("getWindow", "()Landroid/view/Window;");
+        constexpr jint FLAG_KEEP_SCREEN_ON = 0x80;
+        if (on)
+            window.callMethod<void>("addFlags", "(I)V", FLAG_KEEP_SCREEN_ON);
+        else
+            window.callMethod<void>("clearFlags", "(I)V", FLAG_KEEP_SCREEN_ON);
+    });
+#else
+    Q_UNUSED(on)
+#endif
 }
 
 // Series

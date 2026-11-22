@@ -11,6 +11,18 @@ Rectangle {
     clip: true
 
     property alias output: video
+
+    component OsdButton: ToolButton {
+        property string iconName
+        property int size: 56
+        implicitWidth: size
+        implicitHeight: size
+        icon.source: "qrc:/icons/" + iconName + ".svg"
+        icon.color: "white"
+        icon.width: size * 0.55
+        icon.height: size * 0.55
+        background: Rectangle { radius: width / 2; color: "#66000000" }
+    }
     property bool osd: false
     readonly property var live: win.isLive ? (backend.revision, backend.entry(win.playingKey)) : ({})
     readonly property bool waiting: player.error === MediaPlayer.NoError
@@ -18,6 +30,9 @@ Rectangle {
 
     property string noticeText: ""
     readonly property bool menuOpen: audioMenu.opened || subtitleMenu.opened
+    readonly property bool osdShown: win.expanded && (osd || menuOpen || player.playbackState !== MediaPlayer.PlayingState)
+    // A notch or rounded corners can cover the edges while the bars are hidden.
+    readonly property var safe: win.contentItem.SafeArea.margins
 
     function showOsd() {
         osd = true
@@ -53,8 +68,10 @@ Rectangle {
         hoverEnabled: win.expanded
         cursorShape: win.expanded && !view.osd ? Qt.BlankCursor : Qt.ArrowCursor
         onPositionChanged: if (win.expanded) view.showOsd()
-        onClicked: win.expanded ? view.showOsd() : win.setExpanded(true)
-        onDoubleClicked: if (win.expanded) win.setExpanded(false)
+        // A tap shows the controls, or hides them when they're up.
+        onClicked: !win.expanded ? win.setExpanded(true)
+                 : win.touch && view.osd ? (view.osd = false) : view.showOsd()
+        onDoubleClicked: if (win.expanded && !win.touch) win.setExpanded(false)
     }
 
     BusyIndicator {
@@ -87,16 +104,24 @@ Rectangle {
             elide: Text.ElideRight
         }
         Label {
+            visible: !win.android
             text: qsTr("Press O to try it in mpv.")
             color: win.muted
             horizontalAlignment: Text.AlignHCenter
             Layout.fillWidth: true
         }
+        Button {
+            visible: win.android
+            text: qsTr("Open in another app")
+            Material.roundedScale: theme.radius
+            Layout.alignment: Qt.AlignHCenter
+            onClicked: backend.openExternally(win.playingKey, player.position)
+        }
     }
 
     Label {
         anchors.centerIn: parent
-        visible: player.playbackState === MediaPlayer.PausedState
+        visible: player.playbackState === MediaPlayer.PausedState && !(win.touch && view.osdShown)
         text: "❚❚"
         color: "white"
         font.pixelSize: win.expanded ? 56 : 32
@@ -107,7 +132,7 @@ Rectangle {
         anchors.top: parent.top
         anchors.right: parent.right
         anchors.margins: win.expanded ? 28 : 10
-        visible: audio.muted || (view.osd && win.expanded)
+        visible: audio.muted || (view.osd && win.expanded && !win.touch)
         text: audio.muted ? qsTr("Muted") : qsTr("Volume %1%").arg(Math.round(backend.volume * 100))
         color: "white"
         padding: 6
@@ -126,13 +151,89 @@ Rectangle {
         background: Rectangle { color: "#cc000000"; radius: win.small }
     }
 
+    // Touch: back, favourite and "another app" along the top, and the
+    // transport buttons in the middle.
+    Rectangle {
+        visible: win.touch && view.osdShown
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.top: parent.top
+        height: topControls.implicitHeight + 32 + view.safe.top
+        gradient: Gradient {
+            GradientStop { position: 0; color: "#cc000000" }
+            GradientStop { position: 1; color: "transparent" }
+        }
+        RowLayout {
+            id: topControls
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.top: parent.top
+            anchors.topMargin: 8 + view.safe.top
+            anchors.leftMargin: 8 + view.safe.left
+            anchors.rightMargin: 8 + view.safe.right
+            ToolButton {
+                icon.source: "qrc:/icons/back.svg"
+                icon.color: "white"
+                onClicked: win.back()
+            }
+            Item { Layout.fillWidth: true }
+            ToolButton {
+                icon.source: (backend.revision, backend.entry(win.playingKey).favorite)
+                             ? "qrc:/icons/star.svg" : "qrc:/icons/star-outline.svg"
+                icon.color: (backend.revision, backend.entry(win.playingKey).favorite) ? win.accent : "white"
+                onClicked: {
+                    win.toggleFavorite(win.playingKey)
+                    view.showOsd()
+                }
+            }
+            ToolButton {
+                visible: win.android
+                icon.source: "qrc:/icons/open-external.svg"
+                icon.color: "white"
+                onClicked: {
+                    if (backend.openExternally(win.playingKey, player.position)) {
+                        win.saveProgress()
+                        player.pause()
+                    }
+                }
+            }
+        }
+    }
+
+    Row {
+        visible: win.touch && view.osdShown
+        anchors.centerIn: parent
+        spacing: 36
+
+        OsdButton {
+            anchors.verticalCenter: parent.verticalCenter
+            iconName: win.isLive ? "previous" : "rewind"
+            enabled: win.isLive || player.seekable
+            onClicked: win.isLive ? win.zap(-1) : win.seek(-10000)
+        }
+        OsdButton {
+            iconName: player.playbackState === MediaPlayer.PlayingState ? "pause" : "play"
+            size: 76
+            onClicked: {
+                player.playbackState === MediaPlayer.PlayingState ? player.pause() : player.play()
+                view.showOsd()
+            }
+        }
+        OsdButton {
+            anchors.verticalCenter: parent.verticalCenter
+            iconName: win.isLive ? "next" : "forward"
+            enabled: win.isLive || player.seekable
+            onClicked: win.isLive ? win.zap(1) : win.seek(10000)
+        }
+    }
+
     // What's on, shown for a few seconds after anything changes.
     Rectangle {
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.bottom: parent.bottom
-        height: osdColumn.implicitHeight + 72
-        visible: win.expanded && (view.osd || view.menuOpen || player.playbackState !== MediaPlayer.PlayingState)
+        height: osdColumn.implicitHeight + (win.compact ? 40 : 72) + view.safe.bottom
+        visible: view.osdShown
         gradient: Gradient {
             GradientStop { position: 0; color: "transparent" }
             GradientStop { position: 0.35; color: "#cc000000" }
@@ -151,7 +252,10 @@ Rectangle {
             anchors.left: parent.left
             anchors.right: parent.right
             anchors.bottom: parent.bottom
-            anchors.margins: 36
+            anchors.margins: win.compact ? 16 : 36
+            anchors.bottomMargin: (win.compact ? 16 : 36) + view.safe.bottom
+            anchors.leftMargin: (win.compact ? 16 : 36) + view.safe.left
+            anchors.rightMargin: (win.compact ? 16 : 36) + view.safe.right
             spacing: 8
 
             RowLayout {
@@ -172,7 +276,7 @@ Rectangle {
                           + (win.playing.name || "")
                           + ((backend.revision, backend.entry(win.playingKey).favorite) ? "  ★" : "")
                     color: "white"
-                    font.pixelSize: 26
+                    font.pixelSize: win.compact ? 18 : 26
                     font.bold: true
                     elide: Text.ElideRight
                     Layout.fillWidth: true
@@ -180,7 +284,7 @@ Rectangle {
                 Label {
                     text: win.clock(backend.now)
                     color: "#d0d0d6"
-                    font.pixelSize: 20
+                    font.pixelSize: win.compact ? 15 : 20
                 }
             }
 
@@ -191,7 +295,7 @@ Rectangle {
                       ? win.clock(view.live.nowStart) + " – " + win.clock(view.live.nowStop) + "   " + view.live.nowTitle
                       : qsTr("No programme information")
                 color: "white"
-                font.pixelSize: 18
+                font.pixelSize: win.compact ? 14 : 18
                 elide: Text.ElideRight
                 Layout.fillWidth: true
             }
@@ -308,6 +412,7 @@ Rectangle {
             }
 
             Label {
+                visible: !win.touch
                 text: win.isLive
                       ? qsTr("↑ ↓ change channel · Space pause · A audio · S subtitles · F favourite · Esc back to the list · ? shortcuts")
                       : qsTr("← → 10 seconds · Shift+← → 1 minute · Space pause · A audio · S subtitles · Esc stop · ? shortcuts")

@@ -27,3 +27,15 @@ SOURCES += \
     src/translator.cpp
 
 RESOURCES += src/resources.qrc
+
+android {
+    ANDROID_PACKAGE_SOURCE_DIR = $$PWD/android
+    ANDROID_VERSION_NAME = 0.1.0
+    ANDROID_VERSION_CODE = 1
+    ANDROID_MIN_SDK_VERSION = 28
+    ANDROID_TARGET_SDK_VERSION = 36
+    # Posters and https streams need OpenSSL, which Android doesn't ship to apps
+    # (https://github.com/KDAB/android_openssl, cloned into ~/Android; bin/apk points here).
+    ANDROID_OPENSSL = $$(ANDROID_OPENSSL)
+    !isEmpty(ANDROID_OPENSSL): include($$ANDROID_OPENSSL/openssl.pri)
+}

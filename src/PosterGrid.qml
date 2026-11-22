@@ -19,10 +19,11 @@ FocusScope {
 
     ColumnLayout {
         anchors.fill: parent
-        anchors.margins: 16
+        anchors.margins: win.compact ? 8 : 16
         spacing: 10
 
         RowLayout {
+            visible: !win.compact
             Layout.fillWidth: true
             Label {
                 text: win.sectionTitle(backend.section)
@@ -50,7 +51,7 @@ FocusScope {
             keyNavigationEnabled: true
             ScrollBar.vertical: ScrollBar {}
 
-            readonly property int columns: Math.max(1, Math.floor(width / 168))
+            readonly property int columns: Math.max(1, Math.floor(width / (win.compact ? 120 : 168)))
             cellWidth: Math.floor(width / columns)
             cellHeight: Math.round((cellWidth - 16) * 1.5) + 52
 
@@ -165,8 +166,11 @@ FocusScope {
                     onClicked: {
                         grid.currentIndex = cell.index
                         grid.forceActiveFocus()
+                        if (win.touch)
+                            win.activate(cell.key)
                     }
-                    onDoubleClicked: win.activate(cell.key)
+                    onDoubleClicked: if (!win.touch) win.activate(cell.key)
+                    onPressAndHold: if (win.touch) win.toggleFavorite(cell.key)
                 }
             }
 
@@ -175,7 +179,8 @@ FocusScope {
                 width: Math.min(parent.width - 48, 420)
                 visible: grid.count === 0
                 text: backend.sources.length === 0
-                      ? qsTr("No sources yet. Press 7 to add an Xtream Codes account or an M3U playlist.")
+                      ? (win.touch ? qsTr("No sources yet. Open Sources from the menu to add an Xtream Codes account or an M3U playlist.")
+                                 : qsTr("No sources yet. Press 7 to add an Xtream Codes account or an M3U playlist."))
                       : backend.busy ? qsTr("Loading…") : qsTr("Nothing in this category.")
                 color: win.muted
                 wrapMode: Text.Wrap

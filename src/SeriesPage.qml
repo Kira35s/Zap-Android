@@ -45,16 +45,17 @@ FocusScope {
 
     ColumnLayout {
         anchors.fill: parent
-        anchors.margins: 16
-        spacing: 14
+        anchors.margins: win.compact ? 10 : 16
+        spacing: win.compact ? 10 : 14
 
         RowLayout {
             Layout.fillWidth: true
             spacing: 18
 
             Rectangle {
-                Layout.preferredWidth: 130
-                Layout.preferredHeight: 195
+                Layout.preferredWidth: win.compact ? 90 : 130
+                Layout.preferredHeight: win.compact ? 135 : 195
+                Layout.alignment: Qt.AlignTop
                 color: win.raised
                 radius: win.small
                 clip: true
@@ -74,7 +75,7 @@ FocusScope {
                 Label {
                     text: (page.info.name || "") + (page.info.favorite ? "  ★" : "")
                     color: win.ink
-                    font.pixelSize: 26
+                    font.pixelSize: win.compact ? 20 : 26
                     font.bold: true
                     wrapMode: Text.Wrap
                     Layout.fillWidth: true
@@ -91,7 +92,7 @@ FocusScope {
                     text: page.info.plot || ""
                     color: "#c4c4cc"
                     wrapMode: Text.Wrap
-                    maximumLineCount: 4
+                    maximumLineCount: win.compact ? 3 : 4
                     elide: Text.ElideRight
                     Layout.fillWidth: true
                 }
@@ -112,6 +113,7 @@ FocusScope {
                     Layout.fillWidth: true
                 }
                 Label {
+                    visible: !win.touch
                     text: qsTr("← → or click: change season · ↑ ↓ choose an episode · Enter: play · Esc: back")
                     color: win.muted
                     font.pixelSize: 12
@@ -186,8 +188,10 @@ FocusScope {
                     onClicked: {
                         episodes.currentIndex = row.index
                         episodes.forceActiveFocus()
+                        if (win.touch)
+                            win.activate(row.key)
                     }
-                    onDoubleClicked: win.activate(row.key)
+                    onDoubleClicked: if (!win.touch) win.activate(row.key)
                 }
 
                 RowLayout {
@@ -202,8 +206,8 @@ FocusScope {
                         Layout.preferredWidth: 30
                     }
                     Rectangle {
-                        Layout.preferredWidth: 106
-                        Layout.preferredHeight: 60
+                        Layout.preferredWidth: win.compact ? 88 : 106
+                        Layout.preferredHeight: win.compact ? 50 : 60
                         color: win.raised
                         radius: win.small
                         clip: true

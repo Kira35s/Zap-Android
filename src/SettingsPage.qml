@@ -13,7 +13,8 @@ FocusScope {
     }
 
     readonly property var languages: [
-        { code: "", label: qsTr("Follow Omarchy (%1)").arg(languageName(translator.systemLanguage)) },
+        { code: "", label: (win.android ? qsTr("Follow the system (%1)") : qsTr("Follow Omarchy (%1)"))
+                               .arg(languageName(translator.systemLanguage)) },
         { code: "fr", label: "Français" },
         { code: "en", label: "English" }
     ]
@@ -36,6 +37,7 @@ FocusScope {
         spacing: 10
 
         Label {
+            visible: !win.compact
             text: qsTr("Settings")
             font.pixelSize: 22
             font.bold: true
@@ -53,7 +55,7 @@ FocusScope {
 
         ListView {
             id: list
-            Layout.preferredWidth: 460
+            Layout.preferredWidth: Math.min(460, page.width - 32)
             Layout.preferredHeight: contentHeight
             focus: true
             interactive: false
@@ -83,12 +85,12 @@ FocusScope {
         }
 
         Label {
-            text: qsTr("Only Zap changes language: the rest of the desktop keeps the one set in Omarchy.")
-                  + "\n" + qsTr("Languages without a translation show in English.")
+            text: (win.android ? "" : qsTr("Only Zap changes language: the rest of the desktop keeps the one set in Omarchy.") + "\n")
+                  + qsTr("Languages without a translation show in English.")
             color: win.muted
             font.pixelSize: 13
             wrapMode: Text.Wrap
-            Layout.preferredWidth: 460
+            Layout.preferredWidth: Math.min(460, page.width - 32)
         }
 
         Item { Layout.fillHeight: true }

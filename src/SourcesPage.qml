@@ -23,6 +23,14 @@ FocusScope {
         editing = true
         Qt.callLater(() => nameField.forceActiveFocus())
     }
+    // Back on a phone closes the form, back to the list.
+    function back() {
+        if (!win.touch || !editing)
+            return false
+        editing = false
+        list.forceActiveFocus()
+        return true
+    }
     function save() {
         const error = backend.saveSource({
             id: editingId,
@@ -48,20 +56,23 @@ FocusScope {
             list.forceActiveFocus()
     }
 
+    // A phone shows the list or the form, not both.
     RowLayout {
         anchors.fill: parent
-        anchors.margins: 16
+        anchors.margins: win.compact ? 10 : 16
         spacing: 24
 
         ColumnLayout {
+            visible: !win.compact || !page.editing
             // Children that fill the width would otherwise make this column fill it too.
-            Layout.fillWidth: false
-            Layout.preferredWidth: 300
-            Layout.maximumWidth: 300
+            Layout.fillWidth: win.compact
+            Layout.preferredWidth: win.compact ? -1 : 300
+            Layout.maximumWidth: win.compact ? -1 : 300
             Layout.fillHeight: true
             spacing: 10
 
             Label {
+                visible: !win.compact
                 text: qsTr("Sources")
                 font.pixelSize: 22
                 font.bold: true
@@ -137,6 +148,7 @@ FocusScope {
         }
 
         Rectangle {
+            visible: !win.compact || page.editing
             Layout.fillWidth: true
             Layout.fillHeight: true
             color: win.panel
@@ -154,7 +166,7 @@ FocusScope {
 
             Flickable {
                 anchors.fill: parent
-                anchors.margins: 24
+                anchors.margins: win.compact ? 14 : 24
                 visible: page.editing
                 contentHeight: form.implicitHeight
                 clip: true
@@ -200,10 +212,12 @@ FocusScope {
                         inputMethodHints: Qt.ImhUrlCharactersOnly | Qt.ImhNoAutoUppercase
                         Layout.fillWidth: true
                     }
-                    RowLayout {
+                    GridLayout {
                         visible: xtream.checked
                         Layout.fillWidth: true
-                        spacing: 12
+                        columns: win.compact ? 1 : 2
+                        columnSpacing: 12
+                        rowSpacing: 12
                         TextField {
                             Material.roundedScale: theme.radius
                             id: userField
@@ -274,7 +288,8 @@ FocusScope {
                     }
 
                     Label {
-                        text: qsTr("Passwords are kept in ~/.config/zap/sources.json, readable only by you.")
+                        text: win.android ? qsTr("Passwords stay on this device, in storage only Zap can read.")
+                                          : qsTr("Passwords are kept in ~/.config/zap/sources.json, readable only by you.")
                         color: win.muted
                         font.pixelSize: 12
                         wrapMode: Text.Wrap

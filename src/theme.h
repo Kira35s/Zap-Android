@@ -33,7 +33,11 @@ private:
     QFileSystemWatcher m_watcher;
     QTimer m_debounce;
     QString m_hyprctl;
+#ifdef Q_OS_ANDROID
+    int m_radius = 10; // no Hyprland to follow; rounder corners suit a phone
+#else
     int m_radius = 0;
+#endif
     QProcess m_roundingProcess;
     QTimer m_roundingPoll, m_roundingTimeout;
 };

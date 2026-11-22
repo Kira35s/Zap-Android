@@ -10,8 +10,8 @@ FocusScope {
     id: guide
 
     property alias videoHost: preview
-    readonly property int channelWidth: 240
-    readonly property real pxPerMinute: 7
+    readonly property int channelWidth: win.compact ? 112 : 240
+    readonly property real pxPerMinute: win.compact ? 4 : 7
     readonly property int rowHeight: 58
     readonly property int halfHour: 1800
 
@@ -72,21 +72,29 @@ FocusScope {
     }
     onCurrentKeyChanged: win.selectedKey = currentKey
 
+    // Touch has no arrow keys to walk the timeline, so these buttons do.
+    function shift(hours) {
+        viewStart = Math.max(floorHalfHour(backend.now), viewStart + hours * 3600)
+        cursor = Math.max(cursor, viewStart)
+    }
+
     ColumnLayout {
         anchors.fill: parent
-        anchors.margins: 16
-        spacing: 12
+        anchors.margins: win.compact ? 8 : 16
+        spacing: win.compact ? 6 : 12
 
         // Explicit geometry: the preview's width follows its height, which
         // inside nested layouts would feed back into the page's implicit size.
         Item {
             id: top
             Layout.fillWidth: true
-            Layout.preferredHeight: Math.round(guide.height * 0.34)
+            Layout.preferredHeight: Math.round(guide.height * (win.compact ? 0.2 : 0.34))
 
+            // A phone plays full screen, so there's no preview to keep room for.
             Rectangle {
                 id: preview
-                width: Math.min(Math.round(top.height * 16 / 9), Math.round(top.width * 0.55))
+                visible: !win.compact
+                width: win.compact ? 0 : Math.min(Math.round(top.height * 16 / 9), Math.round(top.width * 0.55))
                 height: Math.round(width * 9 / 16)
                 color: "black"
                 radius: theme.radius
@@ -104,7 +112,7 @@ FocusScope {
 
             Column {
                 anchors.left: preview.right
-                anchors.leftMargin: 18
+                anchors.leftMargin: win.compact ? 0 : 18
                 anchors.right: parent.right
                 height: top.height
                 spacing: 6
@@ -120,7 +128,7 @@ FocusScope {
                     width: parent.width
                     text: guide.selected.title || qsTr("No programme information")
                     color: win.ink
-                    font.pixelSize: 24
+                    font.pixelSize: win.compact ? 18 : 24
                     font.bold: true
                     wrapMode: Text.Wrap
                     maximumLineCount: 2
@@ -144,6 +152,30 @@ FocusScope {
                     elide: Text.ElideRight
                 }
             }
+        }
+
+        RowLayout {
+            visible: win.touch
+            Layout.fillWidth: true
+            spacing: 4
+            ToolButton {
+                icon.source: "qrc:/icons/rewind.svg"
+                icon.color: win.ink
+                enabled: guide.viewStart > guide.floorHalfHour(backend.now)
+                onClicked: guide.shift(-1)
+            }
+            Button {
+                text: qsTr("Now")
+                flat: true
+                Material.roundedScale: theme.radius
+                onClicked: guide.resetTime()
+            }
+            ToolButton {
+                icon.source: "qrc:/icons/forward.svg"
+                icon.color: win.ink
+                onClicked: guide.shift(1)
+            }
+            Item { Layout.fillWidth: true }
         }
 
         Item {
@@ -232,6 +264,7 @@ FocusScope {
                             anchors.rightMargin: 8
                             spacing: 8
                             Label {
+                                visible: !win.compact
                                 text: row.number > 0 ? row.number : ""
                                 color: win.muted
                                 font.pixelSize: 12
@@ -243,11 +276,14 @@ FocusScope {
                                 asynchronous: true
                                 fillMode: Image.PreserveAspectFit
                                 sourceSize.height: 64
-                                Layout.preferredWidth: 48
+                                Layout.preferredWidth: win.compact ? 36 : 48
                                 Layout.preferredHeight: 32
                             }
                             Label {
                                 text: (row.key === win.playingKey ? "▶ " : "") + row.name
+                                font.pixelSize: win.compact ? 12 : 14
+                                wrapMode: win.compact ? Text.Wrap : Text.NoWrap
+                                maximumLineCount: 2
                                 color: win.ink
                                 elide: Text.ElideRight
                                 Layout.fillWidth: true
@@ -258,8 +294,10 @@ FocusScope {
                             onClicked: {
                                 rows.currentIndex = row.index
                                 rows.forceActiveFocus()
+                                if (win.touch)
+                                    win.activate(row.key)
                             }
-                            onDoubleClicked: win.activate(row.key)
+                            onDoubleClicked: if (!win.touch) win.activate(row.key)
                         }
                     }
 
@@ -300,12 +338,17 @@ FocusScope {
                                 }
                                 MouseArea {
                                     anchors.fill: parent
+                                    // On touch, the first tap shows the programme, a second on it plays.
                                     onClicked: {
+                                        if (win.touch && block.chosen && block.airing) {
+                                            win.activate(row.key)
+                                            return
+                                        }
                                         rows.currentIndex = row.index
                                         guide.cursor = Math.max(block.modelData.start, backend.now)
                                         rows.forceActiveFocus()
                                     }
-                                    onDoubleClicked: win.activate(row.key)
+                                    onDoubleClicked: if (!win.touch) win.activate(row.key)
                                 }
                             }
                         }

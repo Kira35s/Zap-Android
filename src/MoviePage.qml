@@ -52,7 +52,7 @@ FocusScope {
     Flickable {
         id: flick
         anchors.fill: parent
-        anchors.margins: 24
+        anchors.margins: win.compact ? 12 : 24
         contentHeight: body.implicitHeight
         clip: true
         boundsBehavior: Flickable.StopAtBounds
@@ -65,11 +65,11 @@ FocusScope {
 
             RowLayout {
                 Layout.fillWidth: true
-                spacing: 24
+                spacing: win.compact ? 14 : 24
 
                 Rectangle {
-                    Layout.preferredWidth: 220
-                    Layout.preferredHeight: 330
+                    Layout.preferredWidth: win.compact ? 110 : 220
+                    Layout.preferredHeight: win.compact ? 165 : 330
                     Layout.alignment: Qt.AlignTop
                     color: win.raised
                     radius: win.small
@@ -98,7 +98,7 @@ FocusScope {
                     Label {
                         text: (page.info.name || "") + (page.info.favorite ? "  ★" : "")
                         color: win.ink
-                        font.pixelSize: 30
+                        font.pixelSize: win.compact ? 22 : 30
                         font.bold: true
                         wrapMode: Text.Wrap
                         Layout.fillWidth: true
@@ -115,9 +115,11 @@ FocusScope {
                         Layout.fillWidth: true
                     }
 
-                    RowLayout {
+                    // Wraps on a phone, where four buttons don't fit on one line.
+                    Flow {
                         spacing: 8
                         Layout.topMargin: 6
+                        Layout.fillWidth: true
                         Button {
                             id: playButton
                             text: page.resumable ? qsTr("▶  Resume at %1").arg(win.duration(page.info.position))
@@ -154,7 +156,7 @@ FocusScope {
                         }
                         Button {
                             id: mpvButton
-                            text: qsTr("Open in mpv")
+                            text: win.android ? qsTr("Open in another app") : qsTr("Open in mpv")
                             flat: !activeFocus
                             Material.roundedScale: theme.radius
                             onClicked: backend.openExternally(page.info.key, page.info.position || 0)
@@ -227,7 +229,7 @@ FocusScope {
                 // What's playing keeps showing here while the sheet is open.
                 Rectangle {
                     id: preview
-                    visible: win.playingKey !== "" && !win.expanded
+                    visible: win.playingKey !== "" && !win.expanded && !win.compact
                     Layout.preferredWidth: 320
                     Layout.preferredHeight: 180
                     Layout.alignment: Qt.AlignTop
@@ -271,6 +273,7 @@ FocusScope {
             }
 
             Label {
+                visible: !win.touch
                 text: qsTr("Enter: play · ← →: choose · F: favourite · Esc: back")
                 color: win.muted
                 font.pixelSize: 12

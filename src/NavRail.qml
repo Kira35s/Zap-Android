@@ -48,8 +48,11 @@ Rectangle {
                 required property var modelData
                 readonly property bool current: backend.section === modelData.id
                 Layout.fillWidth: true
-                implicitHeight: 42
-                onClicked: modelData.id === "search" ? win.startSearch() : win.goSection(modelData.id)
+                implicitHeight: win.touch ? 50 : 42
+                onClicked: {
+                    win.closeDrawers()
+                    modelData.id === "search" ? win.startSearch() : win.goSection(modelData.id)
+                }
                 background: Rectangle {
                     radius: win.small
                     color: item.current ? win.tint(0.18) : item.hovered ? "#1a1a1f" : "transparent"
@@ -72,6 +75,7 @@ Rectangle {
                         Layout.fillWidth: true
                     }
                     Label {
+                        visible: !win.touch
                         text: item.modelData.key
                         color: win.muted
                         font.pixelSize: 12
@@ -101,6 +105,7 @@ Rectangle {
         }
 
         Label {
+            visible: !win.touch
             text: qsTr("? shows every shortcut")
             color: win.muted
             font.pixelSize: 12

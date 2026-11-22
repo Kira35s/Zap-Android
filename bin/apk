@@ -1,0 +1,43 @@
+#!/bin/sh
+# Builds Zap for Android phones and tablets (arm64) into build-android/zap.apk.
+# Needs the toolchain in ~/Android: Qt for Android, the SDK and NDK, a JDK 17
+# (through mise) and KDAB's prebuilt OpenSSL. The APK is signed with
+# ~/Android/zap.keystore, created on the first run; keep it, since Android only
+# installs an update signed with the same key.
+set -eu
+
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+ANDROID="${ZAP_ANDROID_DIR:-$HOME/Android}"
+QT="$ANDROID/Qt/6.12.0/android_arm64_v8a"
+export ANDROID_SDK_ROOT="$ANDROID/Sdk"
+export ANDROID_NDK_ROOT="$ANDROID_SDK_ROOT/ndk/27.2.12479018"
+export ANDROID_OPENSSL="$ANDROID/android_openssl"
+export JAVA_HOME="${JAVA_HOME:-$(mise where java@temurin-17.0.21+9)}"
+export PATH="$JAVA_HOME/bin:$PATH"
+
+KEYSTORE="$ANDROID/zap.keystore"
+PASSFILE="$ANDROID/zap.keystore.pass"
+if [ ! -f "$KEYSTORE" ]; then
+    head -c 24 /dev/urandom | base64 | tr -d '/+=' > "$PASSFILE"
+    chmod 600 "$PASSFILE"
+    keytool -genkeypair -keystore "$KEYSTORE" -alias zap -keyalg RSA -keysize 4096 \
+        -validity 10000 -storepass "$(cat "$PASSFILE")" -dname "CN=Zap" >/dev/null
+fi
+
+BUILD="$ROOT/build-android"
+mkdir -p "$BUILD"
+cd "$BUILD"
+"$QT/bin/qmake" "$ROOT/zap.pro" CONFIG+=release
+make -j"$(nproc)"
+make install INSTALL_ROOT="$BUILD/android-build" >/dev/null
+"$ANDROID/Qt/6.12.0/gcc_64/bin/androiddeployqt" \
+    --input "$BUILD/android-zap-deployment-settings.json" \
+    --output "$BUILD/android-build" \
+    --android-platform android-36 \
+    --jdk "$JAVA_HOME" \
+    --gradle --release \
+    --sign "$KEYSTORE" zap --storepass "$(cat "$PASSFILE")"
+
+APK="$(ls "$BUILD"/android-build/build/outputs/apk/release/*-signed.apk | head -1)"
+cp "$APK" "$BUILD/zap.apk"
+echo "Built $BUILD/zap.apk"

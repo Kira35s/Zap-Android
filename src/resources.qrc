@@ -2,6 +2,7 @@
     <qresource prefix="/">
         <file alias="Main.qml">Main.qml</file>
         <file alias="NavRail.qml">NavRail.qml</file>
+        <file alias="TopBar.qml">TopBar.qml</file>
         <file alias="CategoryList.qml">CategoryList.qml</file>
         <file alias="EntryPage.qml">EntryPage.qml</file>
         <file alias="PosterGrid.qml">PosterGrid.qml</file>
@@ -15,6 +16,21 @@
         <file alias="HelpOverlay.qml">HelpOverlay.qml</file>
         <file alias="ProblemBanner.qml">ProblemBanner.qml</file>
         <file alias="zap.svg">../pkgbuild/zap.svg</file>
+        <file alias="icons/menu.svg">icons/menu.svg</file>
+        <file alias="icons/back.svg">icons/back.svg</file>
+        <file alias="icons/search.svg">icons/search.svg</file>
+        <file alias="icons/categories.svg">icons/categories.svg</file>
+        <file alias="icons/play.svg">icons/play.svg</file>
+        <file alias="icons/pause.svg">icons/pause.svg</file>
+        <file alias="icons/previous.svg">icons/previous.svg</file>
+        <file alias="icons/next.svg">icons/next.svg</file>
+        <file alias="icons/rewind.svg">icons/rewind.svg</file>
+        <file alias="icons/forward.svg">icons/forward.svg</file>
+        <file alias="icons/star.svg">icons/star.svg</file>
+        <file alias="icons/star-outline.svg">icons/star-outline.svg</file>
+        <file alias="icons/close.svg">icons/close.svg</file>
+        <file alias="icons/open-external.svg">icons/open-external.svg</file>
+        <file alias="icons/refresh.svg">icons/refresh.svg</file>
         <file alias="i18n/en.json">i18n/en.json</file>
         <file alias="i18n/fr.json">i18n/fr.json</file>
     </qresource>

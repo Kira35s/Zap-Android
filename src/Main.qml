@@ -9,8 +9,8 @@ ApplicationWindow {
     id: win
     width: 1360
     height: 820
-    minimumWidth: 960
-    minimumHeight: 580
+    minimumWidth: touch ? 0 : 960
+    minimumHeight: touch ? 0 : 580
     visible: true
     title: playing.name ? playing.name + " — Zap" : "Zap"
     color: "#0e0e10"
@@ -25,6 +25,13 @@ ApplicationWindow {
     readonly property color panel: "#141417"
     readonly property color raised: "#1c1c21"
     readonly property int small: Math.min(4, theme.radius)
+
+    // Android: a tap plays, there's no keyboard to hint at, and Back steps back.
+    // On a phone (or a narrow tablet) the side panels fold into drawers and
+    // everything plays full screen. --touch tries it on the desktop.
+    readonly property bool android: Qt.platform.os === "android"
+    readonly property bool touch: android || Qt.application.arguments.indexOf("--touch") >= 0
+    readonly property bool compact: touch && width < 900
 
     property string selectedKey: ""
     property string playingKey: ""
@@ -96,10 +103,11 @@ ApplicationWindow {
         }
         if (e.kind === "live") {
             // The first Enter previews the channel, the second fills the screen.
+            // A phone has no room for the preview, so a tap goes straight to it.
             if (playingKey === key && player.playbackState !== MediaPlayer.StoppedState)
                 setExpanded(true)
             else
-                play(key, false)
+                play(key, compact)
             return
         }
         play(key, true)
@@ -215,6 +223,11 @@ ApplicationWindow {
             chooseSubtitle(player.activeSubtitleTrack + 1 < count ? player.activeSubtitleTrack + 1 : -1)
     }
 
+    function toggleFavorite(key) {
+        backend.toggleFavorite(key)
+        toast.show(backend.entry(key).favorite ? qsTr("Added to favourites") : qsTr("Removed from favourites"))
+    }
+
     // Navigation
 
     function goSection(id) {
@@ -227,6 +240,8 @@ ApplicationWindow {
             currentPage.forceActiveFocus()
     }
     function focusCategories() {
+        if (compact)
+            return
         if (categoryList.visible)
             categoryList.focusList()
     }
@@ -235,11 +250,18 @@ ApplicationWindow {
         backend.section = "search"
         Qt.callLater(() => { if (contentLoader.item && contentLoader.item.focusSearch) contentLoader.item.focusSearch() })
     }
+    function closeDrawers() {
+        navDrawer.close()
+        categoryDrawer.close()
+    }
     function back() {
-        if (helpVisible)
+        if (navDrawer.opened || categoryDrawer.opened)
+            closeDrawers()
+        else if (helpVisible)
             helpVisible = false
         else if (expanded)
-            isLive ? setExpanded(false) : stop()
+            // Without a preview to keep playing in, leaving full screen stops.
+            isLive && !compact ? setExpanded(false) : stop()
         else if (backend.movieOpen) {
             backend.closeMovie()
             Qt.callLater(restoreFocus)
@@ -250,7 +272,12 @@ ApplicationWindow {
             Qt.callLater(restoreFocus)
         } else if (backend.section === "search" && backend.query)
             backend.query = ""
-        else
+        else if (android && backend.section !== "live" && backend.sources.length > 0)
+            goSection("live")
+        else if (android) {
+            saveProgress()
+            Qt.quit()
+        } else
             restoreFocus()
     }
 
@@ -274,6 +301,7 @@ ApplicationWindow {
             }
         }
         onSeekableChanged: win.applyPendingSeek()
+        onPlaybackStateChanged: backend.keepScreenOn(playbackState === MediaPlayer.PlayingState)
         onTracksChanged: win.applyTrackPreferences()
     }
 
@@ -288,7 +316,7 @@ ApplicationWindow {
 
     Shortcut { sequence: "?"; context: Qt.ApplicationShortcut; onActivated: win.helpVisible = !win.helpVisible }
     Shortcut { sequence: "Q"; context: Qt.ApplicationShortcut; onActivated: { win.saveProgress(); Qt.quit() } }
-    Shortcut { sequence: "Esc"; context: Qt.ApplicationShortcut; onActivated: win.back() }
+    Shortcut { sequences: ["Esc", "Back"]; context: Qt.ApplicationShortcut; onActivated: win.back() }
     Shortcut {
         sequence: "Space"
         context: Qt.ApplicationShortcut
@@ -369,61 +397,78 @@ ApplicationWindow {
     Item {
         id: root
         anchors.fill: parent
+        // Android draws under the status and navigation bars; video alone may.
+        anchors.topMargin: win.expanded ? 0 : win.contentItem.SafeArea.margins.top
+        anchors.bottomMargin: win.expanded ? 0 : win.contentItem.SafeArea.margins.bottom
+        anchors.leftMargin: win.expanded ? 0 : win.contentItem.SafeArea.margins.left
+        anchors.rightMargin: win.expanded ? 0 : win.contentItem.SafeArea.margins.right
         LayoutMirroring.enabled: Qt.application.layoutDirection === Qt.RightToLeft
         LayoutMirroring.childrenInherit: true
 
-        RowLayout {
+        ColumnLayout {
             anchors.fill: parent
             spacing: 0
             visible: !win.expanded
 
-            NavRail {
-                Layout.fillHeight: true
-                Layout.preferredWidth: 210
+            TopBar {
+                visible: win.compact
+                Layout.fillWidth: true
             }
 
-            CategoryList {
-                id: categoryList
-                Layout.fillHeight: true
-                Layout.preferredWidth: 260
-                visible: backend.categories.length > 0 && !backend.seriesOpen && !backend.movieOpen
-            }
-
-            // A movie's sheet or a series' episodes open over the list, which
-            // keeps its place underneath for when they close.
-            Item {
+            RowLayout {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                Layout.preferredWidth: 0
-                Layout.preferredHeight: 0
+                spacing: 0
 
-                Loader {
-                    id: contentLoader
-                    anchors.fill: parent
-                    visible: !detailLoader.item
-                    sourceComponent: backend.section === "settings" ? settingsPage
-                                   : backend.section === "sources" ? sourcesPage
-                                   : backend.section === "guide" ? guidePage
-                                   : backend.section === "movies" || backend.section === "series" ? gridPage
-                                   : listPage
-                    onLoaded: Qt.callLater(win.restoreFocus)
+                NavRail {
+                    visible: !win.compact
+                    Layout.fillHeight: true
+                    Layout.preferredWidth: 210
                 }
-                Loader {
-                    id: detailLoader
-                    anchors.fill: parent
-                    sourceComponent: backend.movieOpen ? moviePage : backend.seriesOpen ? seriesPage : null
-                    onLoaded: Qt.callLater(win.restoreFocus)
-                    onItemChanged: if (!item) Qt.callLater(win.restoreFocus)
-                }
-            }
 
-            InfoPane {
-                id: infoPane
-                Layout.fillHeight: true
-                Layout.preferredWidth: Math.round(root.width * 0.3)
-                Layout.preferredHeight: 0
-                visible: backend.section !== "guide" && backend.section !== "sources" && backend.section !== "settings"
-                         && !backend.movieOpen
+                CategoryList {
+                    id: categoryList
+                    Layout.fillHeight: true
+                    Layout.preferredWidth: 260
+                    visible: !win.compact && backend.categories.length > 0 && !backend.seriesOpen && !backend.movieOpen
+                }
+
+                // A movie's sheet or a series' episodes open over the list, which
+                // keeps its place underneath for when they close.
+                Item {
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    Layout.preferredWidth: 0
+                    Layout.preferredHeight: 0
+
+                    Loader {
+                        id: contentLoader
+                        anchors.fill: parent
+                        visible: !detailLoader.item
+                        sourceComponent: backend.section === "settings" ? settingsPage
+                                       : backend.section === "sources" ? sourcesPage
+                                       : backend.section === "guide" ? guidePage
+                                       : backend.section === "movies" || backend.section === "series" ? gridPage
+                                       : listPage
+                        onLoaded: Qt.callLater(win.restoreFocus)
+                    }
+                    Loader {
+                        id: detailLoader
+                        anchors.fill: parent
+                        sourceComponent: backend.movieOpen ? moviePage : backend.seriesOpen ? seriesPage : null
+                        onLoaded: Qt.callLater(win.restoreFocus)
+                        onItemChanged: if (!item) Qt.callLater(win.restoreFocus)
+                    }
+                }
+
+                InfoPane {
+                    id: infoPane
+                    Layout.fillHeight: true
+                    Layout.preferredWidth: Math.round(root.width * 0.3)
+                    Layout.preferredHeight: 0
+                    visible: !win.compact && backend.section !== "guide" && backend.section !== "sources"
+                             && backend.section !== "settings" && !backend.movieOpen
+                }
             }
         }
 
@@ -453,6 +498,40 @@ ApplicationWindow {
             anchors.fill: parent
             visible: win.helpVisible
         }
+
+        // A short confirmation, for what a long press did.
+        Label {
+            id: toast
+            function show(message) {
+                text = message
+                toastTimer.restart()
+            }
+            anchors.horizontalCenter: parent.horizontalCenter
+            anchors.bottom: parent.bottom
+            anchors.bottomMargin: 72
+            visible: toastTimer.running
+            color: win.ink
+            padding: 12
+            background: Rectangle { color: "#ee26262c"; radius: theme.radius }
+            Timer { id: toastTimer; interval: 1800 }
+        }
+    }
+
+    Drawer {
+        id: navDrawer
+        edge: Qt.LeftEdge
+        width: Math.min(300, win.width * 0.8)
+        height: win.height
+        interactive: win.compact && !win.expanded
+        NavRail { anchors.fill: parent }
+    }
+    Drawer {
+        id: categoryDrawer
+        edge: Qt.RightEdge
+        width: Math.min(340, win.width * 0.85)
+        height: win.height
+        interactive: false
+        CategoryList { anchors.fill: parent }
     }
 
     Component { id: listPage; EntryPage {} }

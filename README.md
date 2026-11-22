@@ -1,4 +1,8 @@
-# Zap
+# Zap for Android
+
+The Android version of [Zap](https://github.com/Kira35s/Zap), for phones and
+tablets: the same app, with a touch interface. Build it with `bin/apk` (see
+[Android](#android) below); the desktop build still works from this tree.
 
 ![Zap showing live channels with their TV guide](docs/screenshot.png)
 
@@ -76,7 +80,23 @@ Qt Multimedia's FFmpeg backend; a stream it can't play opens in mpv with O.
 bin/build      # build/zap
 bin/test       # the Qt Test suite, offscreen
 bin/install    # makepkg -fsi: installs zap, its icon and its launcher entry
+bin/apk        # build-android/zap.apk, for Android phones and tablets (arm64)
 ```
+
+### Android
+
+`bin/apk` expects its toolchain in `~/Android`: Qt 6.12.0 for Android
+(`android_arm64_v8a`, with Qt Multimedia, plus the matching `gcc_64` host
+build, both through aqtinstall), the SDK with platform 36 and NDK
+27.2.12479018, KDAB's [android_openssl](https://github.com/KDAB/android_openssl)
+and a Temurin 17 JDK from mise. The first run creates the signing key,
+`~/Android/zap.keystore`; keep it, since Android only installs an update
+signed with the same key.
+
+On Android, or with `--touch` on the desktop, a tap plays, a long press adds
+to the favourites, and the player has on-screen buttons. On a phone the
+sections and categories move into drawers and everything plays full screen.
+"Open in another app" hands a stream to VLC or any other installed player.
 
 ## License
 

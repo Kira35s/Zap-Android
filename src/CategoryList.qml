@@ -66,11 +66,12 @@ Rectangle {
                 required property var modelData
                 required property int index
                 width: ListView.view.width
-                implicitHeight: 40
+                implicitHeight: win.touch ? 48 : 40
                 background: null
                 onClicked: {
                     list.currentIndex = index
                     backend.category = modelData.id
+                    win.closeDrawers()
                     win.restoreFocus()
                 }
                 contentItem: RowLayout {
