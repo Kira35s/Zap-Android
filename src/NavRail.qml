@@ -14,6 +14,7 @@ Rectangle {
         { id: "series", label: qsTr("Series"), key: "4" },
         { id: "favorites", label: qsTr("Favourites"), key: "5" },
         { id: "continue", label: qsTr("Continue watching"), key: "6" },
+        { id: "downloads", label: qsTr("Downloads"), key: "9" },
         { id: "search", label: qsTr("Search"), key: "/" },
         { id: "sources", label: qsTr("Sources"), key: "7" },
         { id: "settings", label: qsTr("Settings"), key: "8" }

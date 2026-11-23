@@ -12,6 +12,7 @@
 #include <QMap>
 #include <QProcess>
 #include <QSaveFile>
+#include <QStorageInfo>
 #include <QStandardPaths>
 #include <QUrl>
 #include <QUuid>
@@ -76,8 +77,15 @@ Backend::Backend(const QString &configDir, const QString &dataDir, const QString
       m_configDir(configDir.isEmpty() ? xdg("XDG_CONFIG_HOME", "/.config") : configDir),
       m_dataDir(dataDir.isEmpty() ? xdg("XDG_DATA_HOME", "/.local/share") : dataDir),
       m_cacheDir(cacheDir.isEmpty() ? xdg("XDG_CACHE_HOME", "/.cache") : cacheDir),
+      m_offline(new Offline(m_dataDir + "/downloads", this)),
       m_entries(new EntryModel(this, this)),
       m_episodes(new EntryModel(this, this)) {
+    connect(m_offline, &Offline::changed, this, [this] {
+        emit downloadsChanged();
+        bump();
+    });
+    connect(m_offline, &Offline::progressed, this, &Backend::downloadsChanged);
+    connect(m_offline, &Offline::activeChanged, this, &Backend::keepAwake);
     m_now = QDateTime::currentSecsSinceEpoch();
     m_tick.setInterval(30000);
     connect(&m_tick, &QTimer::timeout, this, [this] {
@@ -633,7 +641,12 @@ Entry Backend::lookup(const QString &key) const {
     const auto it = m_index.constFind(key);
     if (it != m_index.cend())
         return *it;
-    return m_resume.value(key).entry;
+    if (const auto resume = m_resume.constFind(key); resume != m_resume.cend())
+        return resume->entry;
+    // Downloads keep their own copy, for when the lists can't load.
+    if (const Download *item = m_offline->find(key))
+        return item->entry;
+    return {};
 }
 
 QVariantMap Backend::entry(const QString &key) const {
@@ -645,8 +658,16 @@ QVariantMap Backend::entry(const QString &key) const {
     map.insert("favorite", isFavorite(key));
     map.insert("progress", progress(key));
     map.insert("position", double(m_resume.value(key).position));
-    if (e.kind == Entry::Episode)
-        map.insert("seriesName", lookup(e.seriesKey).name);
+    // A downloaded copy plays instead of the stream.
+    const QString local = m_offline->localFile(key);
+    if (!local.isEmpty())
+        map.insert("url", QUrl::fromLocalFile(local).toString());
+    map.insert("offline", !local.isEmpty());
+    if (e.kind == Entry::Episode) {
+        const Download *item = m_offline->find(key);
+        const QString seriesName = lookup(e.seriesKey).name;
+        map.insert("seriesName", seriesName.isEmpty() && item ? item->seriesName : seriesName);
+    }
     if (e.kind == Entry::Live) {
         const NowNext guide = m_guide.at(e, m_now);
         if (guide.now) {
@@ -823,6 +844,81 @@ void Backend::keepScreenOn(bool on) {
             window.callMethod<void>("addFlags", "(I)V", FLAG_KEEP_SCREEN_ON);
         else
             window.callMethod<void>("clearFlags", "(I)V", FLAG_KEEP_SCREEN_ON);
+    });
+#else
+    Q_UNUSED(on)
+#endif
+}
+
+// Downloads
+
+QVariantMap Backend::downloadMap(const Download &item) const {
+    static const char *states[] = {"queued", "running", "done", "failed"};
+    const Entry &e = item.entry;
+    QVariantMap map = EntryModel::toMap(e);
+    const QString seriesName = lookup(e.seriesKey).name;
+    map.insert("seriesName", seriesName.isEmpty() ? item.seriesName : seriesName);
+    map.insert("state", QString::fromLatin1(states[item.state]));
+    map.insert("received", double(item.received));
+    map.insert("total", double(item.total));
+    map.insert("progress", item.total > 0 ? double(item.received) / double(item.total) : -1.0);
+    map.insert("size", QLocale().formattedDataSize(item.state == Download::Done ? item.total : item.received, 1, QLocale::DataSizeTraditionalFormat));
+    map.insert("totalSize", item.total > 0 ? QLocale().formattedDataSize(item.total, 1, QLocale::DataSizeTraditionalFormat) : QString());
+    map.insert("error", item.error);
+    map.insert("watched", progress(e.key));
+    return map;
+}
+
+QVariantList Backend::downloads() const {
+    QVariantList list;
+    for (const auto &item : m_offline->list())
+        list.append(downloadMap(item));
+    return list;
+}
+
+QString Backend::freeSpace() const {
+    return QLocale().formattedDataSize(QStorageInfo(m_offline->directory()).bytesAvailable(), 1, QLocale::DataSizeTraditionalFormat);
+}
+
+QVariantMap Backend::download(const QString &key) const {
+    const Download *item = m_offline->find(key);
+    return item ? downloadMap(*item) : QVariantMap{{"state", QString()}};
+}
+
+bool Backend::canDownload(const QString &key) const { return Offline::canDownload(lookup(key)); }
+
+void Backend::startDownload(const QString &key) {
+    const Entry e = lookup(key);
+    m_offline->add(e, e.kind == Entry::Episode ? lookup(e.seriesKey).name : QString());
+}
+
+void Backend::retryDownload(const QString &key) { m_offline->retry(key); }
+
+void Backend::removeDownload(const QString &key) { m_offline->remove(key); }
+
+void Backend::keepAwake(bool on) {
+#ifdef Q_OS_ANDROID
+    QNativeInterface::QAndroidApplication::runOnAndroidMainThread([on] {
+        static QJniObject lock;
+        if (!lock.isValid()) {
+            const QJniObject context = QNativeInterface::QAndroidApplication::context();
+            const QJniObject power = context.callObjectMethod(
+                "getSystemService", "(Ljava/lang/String;)Ljava/lang/Object;",
+                QJniObject::fromString("power").object<jstring>());
+            constexpr jint PARTIAL_WAKE_LOCK = 1;
+            lock = power.callObjectMethod("newWakeLock",
+                                          "(ILjava/lang/String;)Landroid/os/PowerManager$WakeLock;",
+                                          PARTIAL_WAKE_LOCK, QJniObject::fromString("zap:download").object<jstring>());
+            if (!lock.isValid())
+                return;
+            lock.callMethod<void>("setReferenceCounted", "(Z)V", jboolean(false));
+        }
+        if (on)
+            lock.callMethod<void>("acquire", "()V");
+        else if (lock.callMethod<jboolean>("isHeld", "()Z"))
+            lock.callMethod<void>("release", "()V");
+        QJniEnvironment env;
+        env.checkAndClearExceptions();
     });
 #else
     Q_UNUSED(on)

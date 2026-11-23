@@ -17,6 +17,8 @@ Rectangle {
         ["↑ ↓  " + qsTr("PgUp PgDn"), qsTr("Previous and next channel while watching")],
         ["← →  Shift+← →", qsTr("Skip 10 seconds or 1 minute in a movie or an episode")],
         ["F", qsTr("Add to or remove from favourites")],
+        ["9", qsTr("Downloads: movies and episodes kept for watching offline")],
+        ["D", qsTr("Download a movie or an episode for watching offline")],
         ["A", qsTr("Change the audio language while watching")],
         ["S", qsTr("Subtitles: off, or the next language")],
         ["M", qsTr("Mute")],

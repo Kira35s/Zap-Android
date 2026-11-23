@@ -2,6 +2,8 @@
 #include <QDir>
 #include <QFile>
 #include <QSignalSpy>
+#include <QTcpServer>
+#include <QTcpSocket>
 #include <QTemporaryDir>
 #include <QtTest>
 #include <zlib.h>
@@ -9,6 +11,7 @@
 #include "backend.h"
 #include "catalog.h"
 #include "guide.h"
+#include "offline.h"
 #include "theme.h"
 #include "translator.h"
 
@@ -446,6 +449,75 @@ private slots:
         QCOMPARE(translator.translate("Main", "%n clips", nullptr, 25), QString("%n клипов"));
         QCOMPARE(Translator::pluralCategory("ar", 11), QString("many"));
         QCOMPARE(Translator::pluralCategory("ja", 1), QString("other"));
+    }
+
+    // A download that loses its connection half way carries on from there,
+    // ends up whole, and goes away with its file when removed.
+    void offlineResumesAndRemoves()
+    {
+        QByteArray video(300000, Qt::Uninitialized);
+        for (int i = 0; i < video.size(); ++i)
+            video[i] = char(i * 7 % 251);
+        QTcpServer server;
+        QVERIFY(server.listen(QHostAddress::LocalHost));
+        QList<QByteArray> ranges;
+        connect(&server, &QTcpServer::newConnection, this, [&] {
+            QTcpSocket *socket = server.nextPendingConnection();
+            connect(socket, &QTcpSocket::readyRead, socket, [&, socket] {
+                const QByteArray request = socket->readAll();
+                qint64 start = 0;
+                const int at = request.indexOf("Range: bytes=");
+                if (at >= 0)
+                    start = request.mid(at + 13, request.indexOf('-', at + 13) - at - 13).toLongLong();
+                ranges << QByteArray::number(start);
+                const QByteArray body = video.mid(start);
+                QByteArray head = at >= 0 ? "HTTP/1.1 206 Partial Content\r\nContent-Range: bytes "
+                                              + QByteArray::number(start) + "-" + QByteArray::number(video.size() - 1)
+                                              + "/" + QByteArray::number(video.size()) + "\r\n"
+                                          : "HTTP/1.1 200 OK\r\n";
+                head += "Content-Length: " + QByteArray::number(body.size()) + "\r\nConnection: close\r\n\r\n";
+                socket->write(head);
+                // The first answer stops a third of the way.
+                socket->write(ranges.size() == 1 ? body.left(100000) : body);
+                socket->disconnectFromHost();
+            });
+        });
+
+        QTemporaryDir dir;
+        Entry movie;
+        movie.kind = Entry::Movie;
+        movie.key = "s:m:1";
+        movie.name = "Film";
+        movie.url = QString("http://127.0.0.1:%1/movie/u/p/1.mkv").arg(server.serverPort());
+        {
+            Offline offline(dir.path());
+            offline.setRetryDelay(10);
+            QSignalSpy changed(&offline, &Offline::changed);
+            offline.add(movie, {});
+            QTRY_VERIFY_WITH_TIMEOUT(offline.find(movie.key)->state == Download::Done, 10000);
+            QCOMPARE(ranges, (QList<QByteArray>{"0", "100000"}));
+            QVERIFY(offline.localFile(movie.key).endsWith(".mkv"));
+            QFile file(offline.localFile(movie.key));
+            QVERIFY(file.open(QIODevice::ReadOnly));
+            QCOMPARE(file.readAll(), video);
+        }
+        // It's still there after a restart, then deleting it removes the file.
+        Offline offline(dir.path());
+        const QString path = offline.localFile(movie.key);
+        QVERIFY(QFile::exists(path));
+        QCOMPARE(offline.find(movie.key)->entry.name, QString("Film"));
+        offline.remove(movie.key);
+        QVERIFY(!offline.find(movie.key));
+        QVERIFY(!QFile::exists(path));
+        QVERIFY(Offline(dir.path()).list().isEmpty());
+
+        // Live channels and local files aren't downloadable.
+        Entry live = movie;
+        live.kind = Entry::Live;
+        QVERIFY(!Offline::canDownload(live));
+        Entry local = movie;
+        local.url = "/tmp/film.mkv";
+        QVERIFY(!Offline::canDownload(local));
     }
 
 private:

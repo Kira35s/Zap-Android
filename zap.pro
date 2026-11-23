@@ -13,6 +13,7 @@ HEADERS += \
     src/downloader.h \
     src/entrymodel.h \
     src/guide.h \
+    src/offline.h \
     src/theme.h \
     src/translator.h
 
@@ -23,6 +24,7 @@ SOURCES += \
     src/downloader.cpp \
     src/entrymodel.cpp \
     src/guide.cpp \
+    src/offline.cpp \
     src/theme.cpp \
     src/translator.cpp
 
@@ -30,8 +32,8 @@ RESOURCES += src/resources.qrc
 
 android {
     ANDROID_PACKAGE_SOURCE_DIR = $$PWD/android
-    ANDROID_VERSION_NAME = 0.2.0
-    ANDROID_VERSION_CODE = 2
+    ANDROID_VERSION_NAME = 0.3.0
+    ANDROID_VERSION_CODE = 3
     ANDROID_MIN_SDK_VERSION = 28
     ANDROID_TARGET_SDK_VERSION = 36
     # Posters and https streams need OpenSSL, which Android doesn't ship to apps

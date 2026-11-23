@@ -6,6 +6,7 @@
         <file alias="CategoryList.qml">CategoryList.qml</file>
         <file alias="EntryPage.qml">EntryPage.qml</file>
         <file alias="PosterGrid.qml">PosterGrid.qml</file>
+        <file alias="DownloadsPage.qml">DownloadsPage.qml</file>
         <file alias="GuideGrid.qml">GuideGrid.qml</file>
         <file alias="SeriesPage.qml">SeriesPage.qml</file>
         <file alias="MoviePage.qml">MoviePage.qml</file>

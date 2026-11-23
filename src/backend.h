@@ -12,6 +12,7 @@
 #include "downloader.h"
 #include "entrymodel.h"
 #include "guide.h"
+#include "offline.h"
 
 struct Resume {
     qint64 position = 0; // milliseconds
@@ -48,6 +49,8 @@ class Backend : public QObject, public EntryContext {
     Q_PROPERTY(int revision READ revision NOTIFY revisionChanged)
     Q_PROPERTY(double volume READ volume WRITE setVolume NOTIFY volumeChanged)
     Q_PROPERTY(QString language READ language WRITE setLanguage NOTIFY languageChanged)
+    Q_PROPERTY(QVariantList downloads READ downloads NOTIFY downloadsChanged)
+    Q_PROPERTY(QString freeSpace READ freeSpace NOTIFY downloadsChanged)
 
 public:
     explicit Backend(const QString &configDir = {}, const QString &dataDir = {}, const QString &cacheDir = {},
@@ -89,6 +92,9 @@ public:
     // Zap's own language; empty follows Omarchy. Omarchy's setting is never touched.
     QString language() const { return m_language; }
     void setLanguage(const QString &language);
+    // Movies and episodes kept for watching offline, newest first.
+    QVariantList downloads() const;
+    QString freeSpace() const;
 
     Q_INVOKABLE QVariantMap entry(const QString &key) const;
     Q_INVOKABLE QVariantList programmes(const QString &key, double from, double to) const;
@@ -110,6 +116,13 @@ public:
     // Android only: stops the screen going to sleep while a video plays.
     Q_INVOKABLE void keepScreenOn(bool on);
     Q_INVOKABLE void refresh();
+    // Its download's state ("" when there's none, or "queued", "running",
+    // "done", "failed"), progress and size.
+    Q_INVOKABLE QVariantMap download(const QString &key) const;
+    Q_INVOKABLE bool canDownload(const QString &key) const;
+    Q_INVOKABLE void startDownload(const QString &key);
+    Q_INVOKABLE void retryDownload(const QString &key);
+    Q_INVOKABLE void removeDownload(const QString &key);
     Q_INVOKABLE QString saveSource(const QVariantMap &values);
     Q_INVOKABLE void removeSource(const QString &id);
     Q_INVOKABLE void dismissProblems();
@@ -137,6 +150,7 @@ signals:
     void revisionChanged();
     void volumeChanged();
     void languageChanged();
+    void downloadsChanged();
 
 private:
     void loadSources();
@@ -163,6 +177,9 @@ private:
     void fetchAll(const QList<QPair<QString, QString>> &files, qint64 maxAge,
                   std::function<void(const QStringList &)> done);
     template <typename T, typename F> void watch(QFuture<T> future, F then);
+    QVariantMap downloadMap(const Download &item) const;
+    // Android only: keeps the processor awake while a download runs, screen off.
+    void keepAwake(bool on);
 
     QString m_configDir, m_dataDir, m_cacheDir;
     QList<Source> m_sources;
@@ -175,6 +192,7 @@ private:
     QVector<Category> m_categories;
     Guide m_guide;
     Downloader m_downloader;
+    Offline *m_offline;
 
     QString m_section = "live";
     QString m_category;

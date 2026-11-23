@@ -152,6 +152,20 @@ FocusScope {
                             Keys.onReturnPressed: clicked()
                             Keys.onEnterPressed: clicked()
                             KeyNavigation.left: startButton.visible ? startButton : playButton
+                            KeyNavigation.right: downloadButton.visible ? downloadButton : mpvButton
+                        }
+                        // Keeps a copy on the device, to watch without a connection.
+                        Button {
+                            id: downloadButton
+                            readonly property var d: (backend.downloads, backend.download(page.info.key || ""))
+                            visible: backend.canDownload(page.info.key || "")
+                            text: win.downloadLabel(d)
+                            flat: !activeFocus && d.state !== "done"
+                            Material.roundedScale: theme.radius
+                            onClicked: win.downloadAction(page.info.key, downloadButton)
+                            Keys.onReturnPressed: clicked()
+                            Keys.onEnterPressed: clicked()
+                            KeyNavigation.left: favoriteButton
                             KeyNavigation.right: mpvButton
                         }
                         Button {
@@ -162,7 +176,7 @@ FocusScope {
                             onClicked: backend.openExternally(page.info.key, page.info.position || 0)
                             Keys.onReturnPressed: clicked()
                             Keys.onEnterPressed: clicked()
-                            KeyNavigation.left: favoriteButton
+                            KeyNavigation.left: downloadButton.visible ? downloadButton : favoriteButton
                         }
                     }
 
@@ -274,7 +288,7 @@ FocusScope {
 
             Label {
                 visible: !win.touch
-                text: qsTr("Enter: play · ← →: choose · F: favourite · Esc: back")
+                text: qsTr("Enter: play · ← →: choose · F: favourite · D: download · Esc: back")
                 color: win.muted
                 font.pixelSize: 12
             }

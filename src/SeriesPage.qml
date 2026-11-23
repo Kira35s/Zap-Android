@@ -114,7 +114,7 @@ FocusScope {
                 }
                 Label {
                     visible: !win.touch
-                    text: qsTr("← → or click: change season · ↑ ↓ choose an episode · Enter: play · Esc: back")
+                    text: qsTr("← → or click: change season · ↑ ↓ choose an episode · Enter: play · D: download · Esc: back")
                     color: win.muted
                     font.pixelSize: 12
                     wrapMode: Text.Wrap
@@ -246,6 +246,18 @@ FocusScope {
                             elide: Text.ElideRight
                             Layout.fillWidth: true
                         }
+                    }
+                    // Download for watching offline, or how far it's got.
+                    ToolButton {
+                        id: downloadButton
+                        readonly property var d: (backend.downloads, backend.download(row.key))
+                        visible: backend.canDownload(row.key)
+                        text: win.downloadGlyph(d)
+                        font.pixelSize: d.state === "running" ? 13 : 18
+                        Material.foreground: d.state === "done" ? win.accent : d.state === "failed" ? "#ff8a80" : win.ink
+                        focusPolicy: Qt.NoFocus
+                        Layout.preferredWidth: 56
+                        onClicked: win.downloadAction(row.key, downloadButton)
                     }
                 }
             }

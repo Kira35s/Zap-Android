@@ -65,6 +65,7 @@ ApplicationWindow {
         case "series": return qsTr("Series")
         case "favorites": return qsTr("Favourites")
         case "continue": return qsTr("Continue watching")
+        case "downloads": return qsTr("Downloads")
         case "search": return qsTr("Search")
         case "sources": return qsTr("Sources")
         case "settings": return qsTr("Settings")
@@ -223,6 +224,57 @@ ApplicationWindow {
             chooseSubtitle(player.activeSubtitleTrack + 1 < count ? player.activeSubtitleTrack + 1 : -1)
     }
 
+    // Downloads for watching offline. d is backend.download(key).
+
+    function downloadLabel(d) {
+        switch (d.state) {
+        case "queued": return qsTr("Waiting to download…")
+        case "running": return d.progress >= 0 ? qsTr("Downloading… %1 %").arg(Math.floor(d.progress * 100))
+                                                : qsTr("Downloading… %1").arg(d.size)
+        case "done": return qsTr("✓  Downloaded")
+        case "failed": return qsTr("Download failed")
+        }
+        return qsTr("↓  Download")
+    }
+    function downloadGlyph(d) {
+        switch (d.state) {
+        case "queued": return "…"
+        case "running": return d.progress >= 0 ? Math.floor(d.progress * 100) + " %" : "↓"
+        case "done": return "✓"
+        case "failed": return "!"
+        }
+        return "↓"
+    }
+    function downloadStatus(d) {
+        switch (d.state) {
+        case "queued": return d.error ? qsTr("Connection lost, trying again shortly…") : qsTr("Waiting to download…")
+        case "running": return d.totalSize ? qsTr("%1 of %2").arg(d.size).arg(d.totalSize) : d.size
+        case "done": return qsTr("Ready to watch offline · %1").arg(d.size)
+        case "failed": return qsTr("Download failed: %1").arg(d.error)
+        }
+        return ""
+    }
+    // Starts it, or offers what can be done with it.
+    function downloadAction(key, anchor) {
+        if (!key || !backend.canDownload(key))
+            return
+        if (!backend.download(key).state) {
+            backend.startDownload(key)
+            toast.show(qsTr("Downloading — find it under Downloads"))
+        } else {
+            downloadMenuFor(key, anchor)
+        }
+    }
+    function downloadMenuFor(key, anchor) {
+        if (!backend.download(key).state)
+            return
+        downloadMenu.key = key
+        downloadMenu.parent = anchor || root
+        downloadMenu.x = anchor ? anchor.width - downloadMenu.width : (root.width - downloadMenu.width) / 2
+        downloadMenu.y = anchor ? anchor.height : (root.height - downloadMenu.height) / 2
+        downloadMenu.open()
+    }
+
     function toggleFavorite(key) {
         backend.toggleFavorite(key)
         toast.show(backend.entry(key).favorite ? qsTr("Added to favourites") : qsTr("Removed from favourites"))
@@ -255,7 +307,9 @@ ApplicationWindow {
         categoryDrawer.close()
     }
     function back() {
-        if (navDrawer.opened || categoryDrawer.opened)
+        if (downloadMenu.opened)
+            downloadMenu.close()
+        else if (navDrawer.opened || categoryDrawer.opened)
             closeDrawers()
         else if (helpVisible)
             helpVisible = false
@@ -340,6 +394,13 @@ ApplicationWindow {
     Shortcut { sequence: "6"; context: Qt.ApplicationShortcut; enabled: !win.expanded; onActivated: win.goSection("continue") }
     Shortcut { sequence: "7"; context: Qt.ApplicationShortcut; enabled: !win.expanded; onActivated: win.goSection("sources") }
     Shortcut { sequence: "8"; context: Qt.ApplicationShortcut; enabled: !win.expanded; onActivated: win.goSection("settings") }
+    Shortcut { sequence: "9"; context: Qt.ApplicationShortcut; enabled: !win.expanded; onActivated: win.goSection("downloads") }
+    Shortcut {
+        sequence: "D"
+        context: Qt.ApplicationShortcut
+        enabled: !win.expanded
+        onActivated: win.downloadAction(backend.movieOpen ? backend.movie.key : win.selectedKey, null)
+    }
     Shortcut {
         sequence: "F"
         context: Qt.ApplicationShortcut
@@ -448,6 +509,7 @@ ApplicationWindow {
                         sourceComponent: backend.section === "settings" ? settingsPage
                                        : backend.section === "sources" ? sourcesPage
                                        : backend.section === "guide" ? guidePage
+                                       : backend.section === "downloads" ? downloadsPage
                                        : backend.section === "movies" || backend.section === "series" ? gridPage
                                        : listPage
                         onLoaded: Qt.callLater(win.restoreFocus)
@@ -534,7 +596,44 @@ ApplicationWindow {
         CategoryList { anchors.fill: parent }
     }
 
+    Menu {
+        id: downloadMenu
+        property string key
+        readonly property var d: (backend.downloads, backend.download(key))
+        modal: true
+        onClosed: Qt.callLater(win.restoreFocus)
+
+        MenuItem {
+            text: qsTr("Play")
+            visible: downloadMenu.d.state === "done"
+            height: visible ? implicitHeight : 0
+            onTriggered: win.activate(downloadMenu.key, true)
+        }
+        MenuItem {
+            text: qsTr("Try again")
+            visible: downloadMenu.d.state === "failed"
+            height: visible ? implicitHeight : 0
+            onTriggered: backend.retryDownload(downloadMenu.key)
+        }
+        MenuItem {
+            text: qsTr("See downloads")
+            visible: backend.section !== "downloads"
+            height: visible ? implicitHeight : 0
+            onTriggered: {
+                backend.closeMovie()
+                backend.closeSeries()
+                win.goSection("downloads")
+            }
+        }
+        MenuItem {
+            text: downloadMenu.d.state === "done" || downloadMenu.d.state === "failed"
+                  ? qsTr("Delete the download") : qsTr("Cancel the download")
+            onTriggered: backend.removeDownload(downloadMenu.key)
+        }
+    }
+
     Component { id: listPage; EntryPage {} }
+    Component { id: downloadsPage; DownloadsPage {} }
     Component { id: gridPage; PosterGrid {} }
     Component { id: guidePage; GuideGrid {} }
     Component { id: seriesPage; SeriesPage {} }
