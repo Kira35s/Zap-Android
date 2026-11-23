@@ -30,8 +30,8 @@ RESOURCES += src/resources.qrc
 
 android {
     ANDROID_PACKAGE_SOURCE_DIR = $$PWD/android
-    ANDROID_VERSION_NAME = 0.1.0
-    ANDROID_VERSION_CODE = 1
+    ANDROID_VERSION_NAME = 0.2.0
+    ANDROID_VERSION_CODE = 2
     ANDROID_MIN_SDK_VERSION = 28
     ANDROID_TARGET_SDK_VERSION = 36
     # Posters and https streams need OpenSSL, which Android doesn't ship to apps

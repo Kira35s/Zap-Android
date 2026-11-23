@@ -1,5 +1,5 @@
 pkgname=zap-iptv
-pkgver=0.1.0
+pkgver=0.2.0
 pkgrel=1
 pkgdesc='IPTV player: live TV with its guide, movies and series from Xtream Codes and M3U'
 arch=('x86_64' 'aarch64')

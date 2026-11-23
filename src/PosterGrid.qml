@@ -39,6 +39,61 @@ FocusScope {
             }
         }
 
+        // The provider's sections (New, Netflix, …) as a row of chips above the
+        // posters, a quicker way in than the category column.
+        ListView {
+            id: chips
+            visible: backend.categories.length > 1
+            Layout.fillWidth: true
+            Layout.preferredHeight: 40
+            orientation: ListView.Horizontal
+            spacing: 8
+            clip: true
+            boundsBehavior: Flickable.StopAtBounds
+            model: backend.categories
+
+            function syncIndex() {
+                for (let i = 0; i < backend.categories.length; ++i)
+                    if (backend.categories[i].id === backend.category) {
+                        currentIndex = i
+                        positionViewAtIndex(i, ListView.Contain)
+                        return
+                    }
+                currentIndex = 0
+                positionViewAtBeginning()
+            }
+            Connections {
+                target: backend
+                function onCategoriesChanged() { Qt.callLater(chips.syncIndex) }
+                function onCategoryChanged() { Qt.callLater(chips.syncIndex) }
+            }
+            Component.onCompleted: syncIndex()
+
+            delegate: ItemDelegate {
+                id: chip
+                required property var modelData
+                readonly property bool current: modelData.id === backend.category
+                height: ListView.view.height
+                leftPadding: 14
+                rightPadding: 14
+                // The keyboard stays on the posters.
+                focusPolicy: Qt.NoFocus
+                onClicked: backend.category = modelData.id
+                background: Rectangle {
+                    radius: height / 2
+                    color: chip.current ? win.tint(0.24) : win.raised
+                    border.width: chip.current ? 1 : 0
+                    border.color: win.accent
+                }
+                contentItem: Label {
+                    text: chip.modelData.name
+                    color: chip.current ? win.ink : "#b9b9c2"
+                    font.bold: chip.current
+                    verticalAlignment: Text.AlignVCenter
+                }
+            }
+        }
+
         GridView {
             id: grid
             Layout.fillWidth: true
